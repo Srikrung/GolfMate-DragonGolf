@@ -311,7 +311,7 @@
         <h2><span class="num">1</span> จำนวนผู้เล่น</h2>
         <div class="stepper">
           <button id="playersMinus">−</button>
-          <div class="val" id="playersCount">4</div>
+          <div class="val" id="playersCount">6</div>
           <button id="playersPlus">+</button>
         </div>
         <div class="players-list" id="playersList"></div>
@@ -331,7 +331,7 @@
           </div>
           <div class="toggle-item" data-game="olympic">
             <div><div class="t-name">โอลิมปิก</div><div class="t-desc">กรอกพ้อยเอง เทียบคู่ต่อคู่ กินส่วนต่าง</div></div>
-            <div class="switch on"><div class="dot"></div></div>
+            <div class="switch"><div class="dot"></div></div>
           </div>
           <div class="toggle-item" data-game="team">
             <div><div class="t-name">ทีม</div><div class="t-desc">แบ่ง 2 ฝั่ง จับคู่ตามอันดับ ปรับราคาด้านล่าง</div></div>
@@ -437,13 +437,13 @@
 (function(){
   // ---------- STATE ----------
   const state = {
-    numPlayers: 4,
+    numPlayers: 6,
     players: [], // {id, name}
     betValue: 20,
     teamBetValue: 20,
     chuanPoints: 5,
     moogudPts: { bogey:1, par:2, birdie:3, eagle:4, albatross:5, hio:10 },
-    games: { moogud:true, olympic:true, team:false },
+    games: { moogud:true, olympic:false, team:false },
     currentHole: 1,
     holes: {} // holeNum -> {par, turboAll, turboSolo, teamDouble, teamRe, strokes:{pid:n}, olyPts:{pid:n}, teams:{pid:'A'|'B'}}
   };
@@ -464,7 +464,7 @@
       const hole = state.holes[n];
       state.players.forEach(p=>{
         if(hole.strokes[p.id] === undefined) hole.strokes[p.id] = hole.par;
-        if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 1;
+        if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 0;
       });
     });
   }
@@ -474,8 +474,8 @@
     if(!state.holes[n]){
       state.holes[n] = { par:4, turboAll:false, turboSolo:false, teamDouble:false, teamRe:false, strokes:{}, olyPts:{}, teams:{} };
       state.players.forEach(p=>{
-        state.holes[n].strokes[p.id] = 4;
-        state.holes[n].olyPts[p.id] = 1;
+        state.holes[n].strokes[p.id] = state.holes[n].par;
+        state.holes[n].olyPts[p.id] = 0;
         // hole.teams[p.id] stays unset until explicitly changed on this hole — see getPlayerTeam()
       });
     }
@@ -533,6 +533,7 @@
       list.appendChild(row);
     });
     list.querySelectorAll('.pname-input').forEach(inp=>{
+      inp.addEventListener('focus', e=> e.target.select());
       inp.addEventListener('input', e=>{
         const pl = state.players.find(x=>x.id===e.target.dataset.pid);
         if(pl) pl.name = e.target.value || pl.name;
@@ -593,6 +594,7 @@
   });
 
   function scoreLabel(strokes, par){
+    if(strokes===0) return {txt:'', cls:''};
     if(strokes===1) return {txt:'โฮลอินวัน', cls:'great'};
     const diff = strokes-par;
     if(diff<=-3) return {txt:'อัลบาทรอส', cls:'great'};
@@ -602,7 +604,7 @@
     if(diff===1) return {txt:'โบกี้', cls:'bogey'};
     if(diff===2) return {txt:'ดับเบิ้ลโบกี้', cls:'bogey'};
     if(diff===3) return {txt:'ทริปเปิ้ลโบกี้', cls:'bogey'};
-    return {txt:`+${diff}`, cls:'bogey'};
+    return {txt:`พาร์+${diff}`, cls:'bogey'};
   }
 
   function renderPlay(){
@@ -654,15 +656,15 @@
     const TEAM_CLASS = { A:'a', B:'b', C:'c', D:'d', solo:'solo', none:'none' };
     state.players.forEach(p=>{
       const strokes = hole.strokes[p.id] ?? hole.par;
-      const olyVal = hole.olyPts[p.id] ?? 1;
+      const olyVal = hole.olyPts[p.id] ?? 0;
       const lbl = scoreLabel(strokes, hole.par);
       const div = document.createElement('div');
       div.className = 'score-card';
       const teamKey = getPlayerTeam(state.currentHole, p.id);
       const teamBadge = state.games.team ? `<button class="team-badge ${TEAM_CLASS[teamKey]}" data-pid="${p.id}">${TEAM_LABEL[teamKey]}</button>` : '';
-      const strokeOptions = Array.from({length:12}, (_,i)=> i+1)
+      const strokeOptions = Array.from({length:13}, (_,i)=> i)
         .map(n=> `<option value="${n}" ${n===strokes?'selected':''}>${n}</option>`).join('');
-      const olyOptions = Array.from({length:10}, (_,i)=> i+1)
+      const olyOptions = Array.from({length:11}, (_,i)=> i)
         .map(n=> `<option value="${n}" ${n===olyVal?'selected':''}>${n}</option>`).join('');
       const olyBlock = state.games.olympic ? `
           <div class="stepblock oly">
@@ -686,7 +688,7 @@
           ${olyBlock}
         </div>
       `;
-      div.querySelector('.minus').onclick = ()=>{ hole.strokes[p.id] = Math.max(1, strokes-1); renderPlay(); };
+      div.querySelector('.minus').onclick = ()=>{ hole.strokes[p.id] = Math.max(0, strokes-1); renderPlay(); };
       div.querySelector('.plus').onclick = ()=>{ hole.strokes[p.id] = Math.min(12, strokes+1); renderPlay(); };
       div.querySelector('.stroke-dropdown').addEventListener('change', e=>{
         hole.strokes[p.id] = parseInt(e.target.value);
@@ -695,7 +697,7 @@
       const olyMinus = div.querySelector('.olyminus');
       const olyPlus = div.querySelector('.olyplus');
       if(olyMinus){
-        olyMinus.onclick = ()=>{ hole.olyPts[p.id] = Math.max(1, olyVal-1); renderPlay(); };
+        olyMinus.onclick = ()=>{ hole.olyPts[p.id] = Math.max(0, olyVal-1); renderPlay(); };
         olyPlus.onclick = ()=>{ hole.olyPts[p.id] = Math.min(10, olyVal+1); renderPlay(); };
       }
       const olyDropdown = div.querySelector('.oly-dropdown');
