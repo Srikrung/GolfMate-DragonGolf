@@ -206,4 +206,838 @@
   .money.pos{color:#1B6B3A; font-weight:700;}
   .money.neg{color:var(--flag); font-weight:700;}
   .rank-badge{
-    width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:cente
+    width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-size:10px; font-weight:700; margin-right:4px;
+  }
+  .rank-badge.r1{background:var(--gold); color:#3a2f00;}
+  .rank-badge.r2{background:#C9C3AE; color:#3a2f00;}
+  .rank-badge.r3{background:#D8A47F; color:#3a2f00;}
+
+  .settle-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px dashed var(--line); font-size:13.5px;}
+  .settle-row:last-child{border-bottom:none;}
+  .settle-row b{font-family:'Space Mono',monospace;}
+
+  .empty-note{font-size:12.5px; color:#8a8266; text-align:center; padding:20px 10px;}
+  .footer-note{text-align:center; font-size:11px; color:#8a8266; margin-top:20px;}
+
+  /* Matrix summary — expandable per-player list (no horizontal scroll, works at any player count) */
+  .plist{background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  .prow{border-bottom:1px solid var(--line);}
+  .prow:last-child{border-bottom:none;}
+  .prow-head{display:flex; align-items:center; gap:8px; padding:12px 14px;}
+  .prow-head .rank{width:18px; font-family:'Space Mono',monospace; font-size:11px; color:#9a9179; font-weight:700; flex:none;}
+  .prow-head .pname{flex:1; font-weight:700; font-size:14px;}
+  .prow-head .ptotal{font-family:'Space Mono',monospace; font-weight:700; font-size:16px;}
+  .prow-head .ptotal.pos{color:#1B6B3A;}
+  .prow-head .ptotal.neg{color:var(--flag);}
+  .prow-head .ptotal.zero{color:#7a7259;}
+  .prow-detail{padding:0 14px 12px 40px;}
+  .vs-chip{
+    display:inline-flex; align-items:center; gap:5px; background:var(--sand); border-radius:8px; padding:4px 9px; margin:2px 4px 2px 0; font-size:12px;
+  }
+  .vs-chip b{font-family:'Space Mono',monospace;}
+  .vs-chip b.pos{color:#1B6B3A;}
+  .vs-chip b.neg{color:var(--flag);}
+  .vs-chip b.zero{color:#9a9179;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="row">
+      <div>
+        <div class="logo"><span class="flag">⛳</span> GolfMate</div>
+        <div class="subtitle" id="headerSub">คำนวณพ้อยพนันกอล์ฟ</div>
+      </div>
+      <div class="pill-nav">
+        <button data-go="setup" class="nav-btn active">ตั้งค่า</button>
+        <button data-go="play" class="nav-btn">เล่น</button>
+        <button data-go="summary" class="nav-btn">สรุป</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- SETUP SCREEN -->
+    <section class="screen active" id="screen-setup">
+      <div class="card">
+        <h2><span class="num">1</span> จำนวนผู้เล่น</h2>
+        <div class="stepper">
+          <button id="playersMinus">−</button>
+          <div class="val" id="playersCount">4</div>
+          <button id="playersPlus">+</button>
+        </div>
+        <div class="players-list" id="playersList"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="num">2</span> ราคาต่อพ้อย (บาท)</h2>
+        <input type="number" id="betValue" value="20" min="0" inputmode="numeric">
+      </div>
+
+      <div class="card">
+        <h2><span class="num">3</span> เลือกเกมพนัน</h2>
+        <div class="toggle-list" id="gameToggles">
+          <div class="toggle-item" data-game="moogud">
+            <div><div class="t-name">หมากัด</div><div class="t-desc">ต่ำสุดกินหลุม พ้อยตามประเภทสกอร์ (ปรับราคาด้านล่าง)</div></div>
+            <div class="switch on"><div class="dot"></div></div>
+          </div>
+          <div class="toggle-item" data-game="olympic">
+            <div><div class="t-name">โอลิมปิก</div><div class="t-desc">กรอกพ้อยเอง เทียบคู่ต่อคู่ กินส่วนต่าง</div></div>
+            <div class="switch on"><div class="dot"></div></div>
+          </div>
+          <div class="toggle-item" data-game="team">
+            <div><div class="t-name">ทีม</div><div class="t-desc">แบ่ง 2 ฝั่ง จับคู่ตามอันดับ ปรับราคาด้านล่าง</div></div>
+            <div class="switch"><div class="dot"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="moogudPtsCard">
+        <h2><span class="num">4</span> พ้อยหมากัด (ตามสกอร์ที่ชนะ)</h2>
+        <div class="players-list" id="moogudPtsList"></div>
+      </div>
+
+      <div class="card" id="teamPriceCard" style="display:none;">
+        <h2><span class="num">5</span> ราคาเกมทีม (แยกจากหมากัด)</h2>
+        <label class="field-label" style="margin-top:0;">ราคาต่อพ้อยทีม (บาท)</label>
+        <input type="number" id="teamBetValue" value="20" min="0" inputmode="numeric">
+        <label class="field-label">ราคาช้วน (พ้อย)</label>
+        <input type="number" id="chuanPoints" value="5" min="0" inputmode="numeric">
+      </div>
+
+      <button class="btn-primary" id="startRoundBtn">เริ่มรอบ →</button>
+    </section>
+
+    <!-- PLAY SCREEN -->
+    <section class="screen" id="screen-play">
+      <div class="hole-nav">
+        <button id="holePrev">‹</button>
+        <div class="hole-board">
+          <div class="hnum" id="holeNumDisp">หลุม 1</div>
+          <div class="hsub">จาก 18 หลุม</div>
+        </div>
+        <button id="holeNext">›</button>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-bottom:6px;">พาร์ประจำหลุม</h2>
+        <div class="par-row" id="parRow">
+          <button class="par-btn" data-par="3">พาร์ 3</button>
+          <button class="par-btn" data-par="4">พาร์ 4</button>
+          <button class="par-btn" data-par="5">พาร์ 5</button>
+        </div>
+        <div class="turbo-row">
+          <div class="turbo-btn" id="turboAllBtn">⚡ All in Turbo</div>
+          <div class="turbo-btn solo" id="turboSoloBtn">🥊 Turbo ตัว</div>
+        </div>
+        <div class="turbo-row" id="teamMultRow" style="display:none;">
+          <div class="turbo-btn re" id="teamDoubleBtn">✌️ เบิ้ล</div>
+          <div class="turbo-btn re" id="teamReBtn">3️⃣ รี</div>
+        </div>
+      </div>
+
+      <div id="scoreCards"></div>
+
+      <div class="card" id="teamCard" style="display:none;">
+        <h2>ทีมประจำหลุมนี้</h2>
+        <div class="players-list" id="teamResultBox"></div>
+      </div>
+
+      <div class="card" id="matrixSummaryCard">
+        <h2>ตารางคะแนนหมากัด (Matrix รวมหมากัด+โอลิมปิก) — หลุมนี้</h2>
+        <div class="plist" id="matrixSummaryList"></div>
+      </div>
+
+      <button class="btn-secondary" id="goSummaryBtn">ดูสรุปคะแนน →</button>
+    </section>
+
+    <!-- SUMMARY SCREEN -->
+    <section class="screen" id="screen-summary">
+      <div class="card" id="leaderCard">
+        <h2>ตารางคะแนนรวม</h2>
+        <table class="lead-table" id="leadTable"></table>
+      </div>
+      <div class="card" id="settleCard">
+        <h2>สรุปยอดเงิน (ต่อพ้อย <span id="betValDisp">20</span> บาท)</h2>
+        <div id="settleList"></div>
+      </div>
+      <div class="card" id="breakdownCard">
+        <h2>แยกตามเกม</h2>
+        <div id="breakdownList"></div>
+      </div>
+      <div class="card" id="teamSummaryCard" style="display:none;">
+        <h2>ทีม (แยกจากหมากัด+โอลิมปิก · ต่อพ้อย <span id="teamBetValDisp">20</span> บาท)</h2>
+        <div id="teamSummaryList"></div>
+      </div>
+      <button class="btn-secondary" id="backToPlayBtn">← กลับไปกรอกสกอร์</button>
+    </section>
+  </main>
+  <div class="footer-note">GolfMate • สร้างเพื่อทีม VIP ใช้งานบนมือถือระหว่างรอบกอล์ฟ</div>
+</div>
+
+<script>
+(function(){
+  // ---------- STATE ----------
+  const state = {
+    numPlayers: 4,
+    players: [], // {id, name}
+    betValue: 20,
+    teamBetValue: 20,
+    chuanPoints: 5,
+    moogudPts: { bogey:1, par:2, birdie:3, eagle:4, albatross:5, hio:10 },
+    games: { moogud:true, olympic:true, team:false },
+    currentHole: 1,
+    holes: {} // holeNum -> {par, turboAll, turboSolo, teamDouble, teamRe, strokes:{pid:n}, olyPts:{pid:n}, teams:{pid:'A'|'B'}}
+  };
+  const TOTAL_HOLES = 18;
+  const DEFAULT_NAMES = ['เอ','บี','ซี','ดี','อี','เอฟ','จี','เอช'];
+
+  function ensurePlayers(){
+    const arr = [];
+    for(let i=0;i<state.numPlayers;i++){
+      const existing = state.players[i];
+      arr.push(existing || {id:'p'+i, name: DEFAULT_NAMES[i]});
+    }
+    state.players = arr;
+    // backfill strokes/olyPts/teams for any player not yet present in already-created holes
+    // (e.g. player count increased after holes were initialized)
+    Object.keys(state.holes).forEach(n=>{
+      const hole = state.holes[n];
+      state.players.forEach((p,i)=>{
+        if(hole.strokes[p.id] === undefined) hole.strokes[p.id] = hole.par;
+        if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 0;
+        if(hole.teams[p.id] === undefined) hole.teams[p.id] = i%2===0 ? 'A' : 'B';
+      });
+    });
+  }
+  ensurePlayers();
+
+  function ensureHole(n){
+    if(!state.holes[n]){
+      const prev = state.holes[n-1]; // carry team assignment forward from the previous hole
+      state.holes[n] = { par:4, turboAll:false, turboSolo:false, teamDouble:false, teamRe:false, strokes:{}, olyPts:{}, teams:{} };
+      state.players.forEach((p,i)=>{
+        state.holes[n].strokes[p.id] = 4;
+        state.holes[n].olyPts[p.id] = 0;
+        state.holes[n].teams[p.id] = (prev && prev.teams[p.id]) ? prev.teams[p.id] : (i%2===0 ? 'A' : 'B');
+      });
+    }
+    return state.holes[n];
+  }
+  for(let i=1;i<=TOTAL_HOLES;i++) ensureHole(i);
+
+  // ---------- NAV ----------
+  const screens = { setup: document.getElementById('screen-setup'), play: document.getElementById('screen-play'), summary: document.getElementById('screen-summary') };
+  document.querySelectorAll('.nav-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> goTo(btn.dataset.go));
+  });
+  function goTo(name){
+    Object.keys(screens).forEach(k=>{
+      screens[k].classList.toggle('active', k===name);
+    });
+    document.querySelectorAll('.nav-btn').forEach(b=> b.classList.toggle('active', b.dataset.go===name));
+    if(name==='play') renderPlay();
+    if(name==='summary') renderSummary();
+    window.scrollTo(0,0);
+  }
+
+  // ---------- SETUP RENDER ----------
+  const playersCountEl = document.getElementById('playersCount');
+  document.getElementById('playersMinus').addEventListener('click', ()=>{
+    state.numPlayers = Math.max(2, state.numPlayers-1);
+    ensurePlayers(); renderSetup();
+  });
+  document.getElementById('playersPlus').addEventListener('click', ()=>{
+    state.numPlayers = Math.min(8, state.numPlayers+1);
+    ensurePlayers(); renderSetup();
+  });
+
+  function renderSetup(){
+    playersCountEl.textContent = state.numPlayers;
+    const list = document.getElementById('playersList');
+    list.innerHTML = '';
+    state.players.forEach((p, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.innerHTML = `<div class="chip">${idx+1}</div>
+        <input type="text" value="${p.name}" data-pid="${p.id}" class="pname-input">`;
+      list.appendChild(row);
+    });
+    list.querySelectorAll('.pname-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const pl = state.players.find(x=>x.id===e.target.dataset.pid);
+        if(pl) pl.name = e.target.value || pl.name;
+      });
+    });
+  }
+
+  const MOOGUD_LABELS = { bogey:'โบกี้ (หรือแย่กว่า)', par:'พาร์', birdie:'เบอร์ดี้', eagle:'อีเกิ้ล', albatross:'อัลบาทรอส', hio:'โฮลอินวัน' };
+  function renderMoogudPts(){
+    const box = document.getElementById('moogudPtsList');
+    box.innerHTML = '';
+    Object.keys(MOOGUD_LABELS).forEach(key=>{
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.innerHTML = `<div style="flex:1;font-weight:600;font-size:13.5px;">${MOOGUD_LABELS[key]}</div>
+        <input type="number" min="0" step="1" value="${state.moogudPts[key]}" data-key="${key}" class="moogud-pt-input" style="width:80px;">`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll('.moogud-pt-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        state.moogudPts[e.target.dataset.key] = parseFloat(e.target.value) || 0;
+      });
+    });
+  }
+  renderMoogudPts();
+
+  document.getElementById('betValue').addEventListener('input', e=>{
+    state.betValue = parseFloat(e.target.value) || 0;
+  });
+  document.getElementById('teamBetValue').addEventListener('input', e=>{
+    state.teamBetValue = parseFloat(e.target.value) || 0;
+  });
+  document.getElementById('chuanPoints').addEventListener('input', e=>{
+    state.chuanPoints = parseFloat(e.target.value) || 0;
+  });
+
+  document.querySelectorAll('#gameToggles .toggle-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const g = item.dataset.game;
+      state.games[g] = !state.games[g];
+      item.querySelector('.switch').classList.toggle('on', state.games[g]);
+      document.getElementById('teamPriceCard').style.display = state.games.team ? 'block':'none';
+    });
+  });
+
+  document.getElementById('startRoundBtn').addEventListener('click', ()=>{
+    goTo('play');
+  });
+
+  renderSetup();
+
+  // ---------- PLAY RENDER ----------
+  document.getElementById('holePrev').addEventListener('click', ()=>{
+    state.currentHole = Math.max(1, state.currentHole-1); renderPlay();
+  });
+  document.getElementById('holeNext').addEventListener('click', ()=>{
+    state.currentHole = Math.min(TOTAL_HOLES, state.currentHole+1); renderPlay();
+  });
+
+  function scoreLabel(strokes, par){
+    if(strokes===1) return {txt:'โฮลอินวัน', cls:'great'};
+    const diff = strokes-par;
+    if(diff<=-3) return {txt:'อัลบาทรอส', cls:'great'};
+    if(diff===-2) return {txt:'อีเกิ้ล', cls:'eagle'};
+    if(diff===-1) return {txt:'เบอร์ดี้', cls:'birdie'};
+    if(diff===0) return {txt:'พาร์', cls:'par'};
+    if(diff===1) return {txt:'โบกี้', cls:'bogey'};
+    if(diff===2) return {txt:'ดับเบิ้ลโบกี้', cls:'bogey'};
+    if(diff===3) return {txt:'ทริปเปิ้ลโบกี้', cls:'bogey'};
+    return {txt:`+${diff}`, cls:'bogey'};
+  }
+
+  function renderPlay(){
+    document.getElementById('holeNumDisp').textContent = 'หลุม ' + state.currentHole;
+    const hole = ensureHole(state.currentHole);
+
+    document.querySelectorAll('.par-btn').forEach(b=>{
+      b.classList.toggle('active', parseInt(b.dataset.par)===hole.par);
+      b.onclick = ()=>{ hole.par = parseInt(b.dataset.par); renderPlay(); };
+    });
+
+    const turboAllBtn = document.getElementById('turboAllBtn');
+    const turboSoloBtn = document.getElementById('turboSoloBtn');
+    turboAllBtn.classList.toggle('active', hole.turboAll);
+    turboSoloBtn.classList.toggle('active', hole.turboSolo);
+    turboAllBtn.onclick = ()=>{
+      hole.turboAll = !hole.turboAll;
+      if(hole.turboAll) hole.turboSolo = false;
+      renderPlay();
+    };
+    turboSoloBtn.onclick = ()=>{
+      hole.turboSolo = !hole.turboSolo;
+      if(hole.turboSolo) hole.turboAll = false;
+      renderPlay();
+    };
+
+    const teamMultRow = document.getElementById('teamMultRow');
+    teamMultRow.style.display = state.games.team ? 'flex' : 'none';
+    const teamDoubleBtn = document.getElementById('teamDoubleBtn');
+    const teamReBtn = document.getElementById('teamReBtn');
+    teamDoubleBtn.classList.toggle('active', hole.teamDouble);
+    teamReBtn.classList.toggle('active', hole.teamRe);
+    teamReBtn.classList.toggle('disabled', !hole.teamDouble);
+    teamDoubleBtn.onclick = ()=>{
+      if(hole.teamDouble){ hole.teamDouble = false; hole.teamRe = false; } // reset both back to ×1
+      else { hole.teamDouble = true; }
+      renderPlay();
+    };
+    teamReBtn.onclick = ()=>{
+      if(!hole.teamDouble) return; // รี only reachable after เบิ้ล is on
+      hole.teamRe = !hole.teamRe;
+      renderPlay();
+    };
+
+    const cardsBox = document.getElementById('scoreCards');
+    cardsBox.innerHTML = '';
+    const TEAM_CYCLE = ['A','B','C','D','solo','none'];
+    const TEAM_LABEL = { A:'ทีม A', B:'ทีม B', C:'ทีม C', D:'ทีม D', solo:'Solo', none:'ไม่เล่น' };
+    const TEAM_CLASS = { A:'a', B:'b', C:'c', D:'d', solo:'solo', none:'none' };
+    state.players.forEach(p=>{
+      const strokes = hole.strokes[p.id] ?? hole.par;
+      const olyVal = hole.olyPts[p.id] ?? 0;
+      const lbl = scoreLabel(strokes, hole.par);
+      const div = document.createElement('div');
+      div.className = 'score-card';
+      const teamKey = hole.teams[p.id] || 'A';
+      const teamBadge = state.games.team ? `<button class="team-badge ${TEAM_CLASS[teamKey]}" data-pid="${p.id}">${TEAM_LABEL[teamKey]}</button>` : '';
+      const olyBlock = state.games.olympic ? `
+          <div class="stepblock oly">
+            <button class="olyminus">−</button>
+            <div class="val">${olyVal}</div>
+            <button class="olyplus">+</button>
+          </div>` : '';
+      div.innerHTML = `
+        <div class="card-top">
+          <div class="pname">${p.name}</div>
+          ${teamBadge}
+          <div class="tag ${lbl.cls}">${lbl.txt}</div>
+        </div>
+        <div class="colhead"><span>สกอร์</span>${state.games.olympic ? '<span>พ้อยโอลิมปิก</span>' : ''}</div>
+        <div class="steprow">
+          <div class="stepblock strokes">
+            <button class="minus">−</button>
+            <div class="val">${strokes}</div>
+            <button class="plus">+</button>
+          </div>
+          ${olyBlock}
+        </div>
+      `;
+      div.querySelector('.minus').onclick = ()=>{ hole.strokes[p.id] = Math.max(1, strokes-1); renderPlay(); };
+      div.querySelector('.plus').onclick = ()=>{ hole.strokes[p.id] = Math.min(12, strokes+1); renderPlay(); };
+      const olyMinus = div.querySelector('.olyminus');
+      const olyPlus = div.querySelector('.olyplus');
+      if(olyMinus){
+        olyMinus.onclick = ()=>{ hole.olyPts[p.id] = olyVal - 1; renderPlay(); };
+        olyPlus.onclick = ()=>{ hole.olyPts[p.id] = olyVal + 1; renderPlay(); };
+      }
+      const teamBadgeBtn = div.querySelector('.team-badge');
+      if(teamBadgeBtn){
+        teamBadgeBtn.onclick = ()=>{
+          const cur = hole.teams[p.id] || 'A';
+          const idx = TEAM_CYCLE.indexOf(cur);
+          hole.teams[p.id] = TEAM_CYCLE[(idx+1) % TEAM_CYCLE.length];
+          renderPlay();
+        };
+      }
+      cardsBox.appendChild(div);
+    });
+
+    renderTeamResult(hole);
+    renderMatrixSummary();
+  }
+
+  document.getElementById('goSummaryBtn').addEventListener('click', ()=> goTo('summary'));
+  document.getElementById('backToPlayBtn').addEventListener('click', ()=> goTo('play'));
+
+  // ---------- CALC ----------
+  function typeOf(strokes, par){
+    if(strokes===1) return 'hio';
+    const diff = strokes-par;
+    if(diff<=-3) return 'alb';
+    if(diff===-2) return 'eagle';
+    if(diff===-1) return 'birdie';
+    if(diff===0) return 'par';
+    return 'bogey';
+  }
+
+  // Pairwise หมากัด winner for a specific pair: whoever has fewer strokes wins that pair.
+  // Returns {winnerId, loserId, type} or null if tied (no exchange for this pair).
+  function pairMoogudWinner(hole, pi, pj){
+    const si = hole.strokes[pi.id], sj = hole.strokes[pj.id];
+    if(si < sj) return { winnerId: pi.id, loserId: pj.id, type: typeOf(si, hole.par) };
+    if(sj < si) return { winnerId: pj.id, loserId: pi.id, type: typeOf(sj, hole.par) };
+    return null;
+  }
+
+  // โอลิมปิกคูณตามประเภทที่ชนะหมากัดของคู่นั้นๆ: เบอร์ดี้×2, อีเกิ้ล×3, อัลบาทรอส×4, โฮลอินวัน×5, อื่นๆ/เสมอ×1
+  const OLY_LINK_MULT = { birdie:2, eagle:3, alb:4, hio:5, par:1, bogey:1 };
+
+  // โอลิมปิกที่ pi ได้จาก pj หลุมนี้ (บวก = pi ได้จาก pj, ลบ = pi เสียให้ pj), รวมเทอร์โบแล้ว
+  // ผู้ชนะคู่นี้ (ตีน้อยกว่า): (พ้อยดิบของผู้ชนะ × ตัวคูณตามประเภทสกอร์ที่ชนะ) − พ้อยดิบของอีกฝ่าย
+  // เสมอกันในคู่นี้: เทียบพ้อยดิบตรงๆ ไม่มีตัวคูณ
+  function olyPairDiff(hole, pi, pj, turboMult){
+    const w = pairMoogudWinner(hole, pi, pj);
+    const vi = hole.olyPts[pi.id] || 0, vj = hole.olyPts[pj.id] || 0;
+    let raw;
+    if(w && w.winnerId===pi.id){
+      raw = (vi * (OLY_LINK_MULT[w.type] || 1)) - vj;
+    } else if(w && w.winnerId===pj.id){
+      raw = vi - (vj * (OLY_LINK_MULT[w.type] || 1));
+    } else {
+      raw = vi - vj;
+    }
+    return raw * turboMult;
+  }
+
+  // ตัวคูณเทอร์โบ: All in Turbo คูณทั้งหมากัด+โอลิมปิก / Turbo ตัว คูณแค่หมากัด
+  function moogudTurboMult(hole){ return (hole.turboAll || hole.turboSolo) ? 2 : 1; }
+  function olyTurboMult(hole){ return hole.turboAll ? 2 : 1; }
+
+  function computeStandings(){
+    const pts = {}; // pid -> {moogud, olympic, combined}
+    state.players.forEach(p=> pts[p.id] = {moogud:0, olympic:0});
+
+    for(let n=1;n<=TOTAL_HOLES;n++){
+      const hole = state.holes[n];
+      if(!hole) continue;
+      const mgMult = moogudTurboMult(hole);
+      const olMult = olyTurboMult(hole);
+
+      // หมากัด: เทียบคู่ต่อคู่ทุกคู่ — ใครตีน้อยกว่าในคู่นั้นชนะ ได้พ้อยตามประเภทสกอร์ของตัวเอง (ตามตารางหน้าตั้งค่า) จากอีกฝ่าย
+      // All in Turbo หรือ Turbo ตัว คูณ 2 ทั้งคู่ (เลือกได้ทีละอย่าง)
+      if(state.games.moogud && state.players.length>1){
+        for(let i=0;i<state.players.length;i++){
+          for(let j=i+1;j<state.players.length;j++){
+            const pi = state.players[i], pj = state.players[j];
+            const w = pairMoogudWinner(hole, pi, pj);
+            if(!w) continue; // ตีเท่ากันในคู่นี้ = ไม่มีพ้อยแลกกัน
+            const key = w.type==='hio' ? 'hio' : w.type==='alb' ? 'albatross' : w.type;
+            const amount = (state.moogudPts[key] || 0) * mgMult;
+            pts[w.winnerId].moogud += amount;
+            pts[w.loserId].moogud -= amount;
+          }
+        }
+      }
+
+      // โอลิมปิก: เทียบคู่ต่อคู่ทุกคู่ — ใครชนะหมากัดในคู่นั้นใช้ตัวคูณ, เสมอกันเทียบพ้อยดิบตรงๆ
+      // เฉพาะ All in Turbo เท่านั้นที่คูณโอลิมปิก (Turbo ตัวไม่คูณ)
+      if(state.games.olympic){
+        for(let i=0;i<state.players.length;i++){
+          for(let j=i+1;j<state.players.length;j++){
+            const pi = state.players[i], pj = state.players[j];
+            const diff = olyPairDiff(hole, pi, pj, olMult);
+            if(diff>0){ pts[pi.id].olympic += diff; pts[pj.id].olympic -= diff; }
+            else if(diff<0){ pts[pj.id].olympic += -diff; pts[pi.id].olympic -= -diff; }
+          }
+        }
+      }
+    }
+
+    state.players.forEach(p=>{
+      const s = pts[p.id];
+      s.combined = (state.games.moogud?s.moogud:0) + (state.games.olympic?s.olympic:0);
+    });
+    return pts;
+  }
+
+  // ---------- TEAM GAME (separate from หมากัด/โอลิมปิก) ----------
+  function rankByStrokes(hole, arr){
+    return [...arr].sort((p,q)=> hole.strokes[p.id]-hole.strokes[q.id]);
+  }
+
+  // Computes this hole's team exchanges before any multiplier is applied. Supports A/B/C/D teams + Solo.
+  // - Each active letter team is ranked best→worst by strokes.
+  // - At every rank depth, all teams' players at that depth round-robin against each other (H2H).
+  // - ช้วน is evaluated per team-PAIR across all shared rank depths (only when both sides are the same size):
+  //   if one side won every shared position against that specific other team, it replaces that pair's
+  //   summed position points with a flat ช้วน price split across the team.
+  // - Solo players face every non-'none' player individually (across all teams and other solos); no ช้วน for solo.
+  // Returns { exchanges:[{winnerId,loserId,amount}], pairResults:[{label,winnerId}], chuanPairs:[{a,b,winnerTeam}] }
+  function computeTeamHole(hole){
+    const LETTERS = ['A','B','C','D'];
+    const teams = {};
+    LETTERS.forEach(L=>{
+      const members = state.players.filter(p=> hole.teams[p.id]===L);
+      if(members.length>0) teams[L] = rankByStrokes(hole, members);
+    });
+    const activeLetters = Object.keys(teams);
+    const solos = state.players.filter(p=> hole.teams[p.id]==='solo');
+
+    const exchanges = [];
+    const pairResults = []; // for display: {label, winnerId}
+    const chuanPairs = [];  // for display: {a, b, winnerTeam}
+
+    function exchangeBetween(p1, p2){
+      const s1 = hole.strokes[p1.id], s2 = hole.strokes[p2.id];
+      let winnerId=null, loserId=null;
+      if(s1<s2){ winnerId=p1.id; loserId=p2.id; }
+      else if(s2<s1){ winnerId=p2.id; loserId=p1.id; }
+      return { winnerId, loserId };
+    }
+
+    // Letter-team vs letter-team: evaluate every unordered pair of active teams across all shared positions.
+    for(let i=0;i<activeLetters.length;i++){
+      for(let j=i+1;j<activeLetters.length;j++){
+        const La = activeLetters[i], Lb = activeLetters[j];
+        const teamA = teams[La], teamB = teams[Lb];
+        const maxPos = Math.min(teamA.length, teamB.length);
+        const posOutcomes = [];
+        for(let p=0;p<maxPos;p++){
+          const r = exchangeBetween(teamA[p], teamB[p]);
+          posOutcomes.push({ ...r, label:`${teamA[p].name} vs ${teamB[p].name}` });
+        }
+        const winsA = posOutcomes.filter(r=>r.winnerId && teamA.some(x=>x.id===r.winnerId)).length;
+        const winsB = posOutcomes.filter(r=>r.winnerId && teamB.some(x=>x.id===r.winnerId)).length;
+        const isChuan = teamA.length===teamB.length && maxPos>0 && (winsA===maxPos || winsB===maxPos);
+        if(isChuan){
+          const winTeam = winsA===maxPos ? teamA : teamB;
+          const loseTeam = winsA===maxPos ? teamB : teamA;
+          const share = state.chuanPoints / winTeam.length;
+          winTeam.forEach((wp,idx)=> exchanges.push({winnerId:wp.id, loserId: loseTeam[idx].id, amount: share}));
+          chuanPairs.push({ a: La, b: Lb, winnerTeam: winsA===maxPos ? La : Lb });
+          // ช้วนแทนที่ผลรายตำแหน่งทั้งหมดของคู่ทีมนี้ — ไม่แสดงรายตำแหน่งซ้ำ
+        } else {
+          posOutcomes.forEach(r=>{
+            if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
+            pairResults.push({ label:r.label, winnerId:r.winnerId });
+          });
+        }
+      }
+    }
+
+    // Solo vs everyone (all letter-team members + other solos), no ช้วน ever for solo matchups.
+    const allNonSolo = activeLetters.flatMap(L=>teams[L]);
+    for(let i=0;i<solos.length;i++){
+      allNonSolo.forEach(opp=>{
+        const r = exchangeBetween(solos[i], opp);
+        if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
+        pairResults.push({ label:`${solos[i].name} (Solo) vs ${opp.name}`, winnerId:r.winnerId });
+      });
+      for(let j=i+1;j<solos.length;j++){
+        const r = exchangeBetween(solos[i], solos[j]);
+        if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
+        pairResults.push({ label:`${solos[i].name} (Solo) vs ${solos[j].name} (Solo)`, winnerId:r.winnerId });
+      }
+    }
+
+    if(exchanges.length===0 && pairResults.length===0) return null;
+    return { exchanges, pairResults, chuanPairs };
+  }
+
+  function teamMultFor(hole){
+    const dr = hole.teamRe ? 3 : hole.teamDouble ? 2 : 1;
+    const turbo = hole.turboAll ? 2 : 1;
+    return dr * turbo;
+  }
+
+  // Round total team points per player (separate table, not combined with หมากัด/โอลิมปิก).
+  function computeTeamStandings(){
+    const pts = {}; state.players.forEach(p=> pts[p.id] = 0);
+    if(!state.games.team) return pts;
+    for(let n=1;n<=TOTAL_HOLES;n++){
+      const hole = state.holes[n];
+      if(!hole) continue;
+      const result = computeTeamHole(hole);
+      if(!result) continue;
+      const mult = teamMultFor(hole);
+      result.exchanges.forEach(ex=>{
+        const amt = ex.amount * mult;
+        pts[ex.winnerId] += amt;
+        pts[ex.loserId] -= amt;
+      });
+    }
+    return pts;
+  }
+
+  // Pairwise net matrix (หมากัด + โอลิมปิก) for ONE hole only.
+  function computeMatrix(holeNum){
+    const n = state.players.length;
+    const matrix = Array.from({length:n}, ()=> new Array(n).fill(0));
+    const idxOf = {}; state.players.forEach((p,i)=> idxOf[p.id]=i);
+
+    const hole = state.holes[holeNum];
+    if(!hole) return matrix;
+    const mgMult = moogudTurboMult(hole);
+    const olMult = olyTurboMult(hole);
+
+    if(state.games.moogud && n>1){
+      for(let i=0;i<state.players.length;i++){
+        for(let j=i+1;j<state.players.length;j++){
+          const pi = state.players[i], pj = state.players[j];
+          const w = pairMoogudWinner(hole, pi, pj);
+          if(!w) continue;
+          const key = w.type==='hio' ? 'hio' : w.type==='alb' ? 'albatross' : w.type;
+          const amount = (state.moogudPts[key] || 0) * mgMult;
+          const wi = idxOf[w.winnerId], li = idxOf[w.loserId];
+          matrix[wi][li] += amount;
+          matrix[li][wi] -= amount;
+        }
+      }
+    }
+
+    if(state.games.olympic){
+      for(let i=0;i<state.players.length;i++){
+        for(let j=i+1;j<state.players.length;j++){
+          const pi = state.players[i], pj = state.players[j];
+          const diff = olyPairDiff(hole, pi, pj, olMult);
+          matrix[i][j] += diff;
+          matrix[j][i] -= diff;
+        }
+      }
+    }
+    return matrix;
+  }
+
+  function fmtCell(v){
+    if(Math.abs(v) < 0.005) return '0';
+    const r = Math.round(v*10)/10;
+    return (r>0?'+':'') + (Number.isInteger(r) ? r : r.toFixed(1));
+  }
+  function cellClass(v){
+    if(Math.abs(v) < 0.005) return 'zero';
+    return v>0 ? 'pos' : 'neg';
+  }
+
+  function renderMatrixSummary(){
+    const box = document.getElementById('matrixSummaryList');
+    const players = state.players;
+    if(players.length < 2){ box.innerHTML = ''; return; }
+    const holeNum = state.currentHole;
+    const matrix = computeMatrix(holeNum);
+
+    const rowTotals = players.map((p,i)=> players.reduce((s,q,j)=> i===j? s : s+matrix[i][j], 0));
+
+    // sort by total (highest first) for ranking
+    const order = players.map((p,i)=>i).sort((a,b)=> rowTotals[b]-rowTotals[a]);
+
+    let html = '';
+    order.forEach((i, rank)=>{
+      const p = players[i];
+      html += `<div class="prow" data-pid="${p.id}">`;
+      html += `<div class="prow-head">
+          <div class="rank">${rank+1}</div>
+          <div class="pname">${p.name}</div>
+          <div class="ptotal ${cellClass(rowTotals[i])}">${fmtCell(rowTotals[i])}</div>
+        </div>`;
+      html += `<div class="prow-detail">`;
+      players.forEach((q,j)=>{
+        if(j===i) return;
+        const v = matrix[i][j];
+        html += `<span class="vs-chip">${q.name} <b class="${cellClass(v)}">${fmtCell(v)}</b></span>`;
+      });
+      html += `</div></div>`;
+    });
+
+    box.innerHTML = html;
+  }
+
+  function renderTeamResult(hole){
+    const teamCard = document.getElementById('teamCard');
+    if(!state.games.team || state.players.length<2){ teamCard.style.display='none'; return; }
+    const result = computeTeamHole(hole);
+    teamCard.style.display = 'block';
+    const box = document.getElementById('teamResultBox');
+    if(!result){
+      box.innerHTML = '<div class="empty-note">ยังไม่มีคู่แข่งขัน — ตั้งทีม/Solo ให้ผู้เล่นก่อน (อย่างน้อย 2 ฝั่ง)</div>';
+      return;
+    }
+    const mult = teamMultFor(hole);
+    let html = '';
+
+    // ช้วนที่เกิดในหลุมนี้ (แสดงก่อน แยกจากคู่ตำแหน่งปกติ)
+    result.chuanPairs.forEach(c=>{
+      html += `<div class="settle-row"><span>🏆 ช้วน! ทีม ${c.winnerTeam} ชนะทีม ${c.a===c.winnerTeam?c.b:c.a} ทุกตำแหน่ง</span><b>${fmtCell(state.chuanPoints*mult)} พ้อย</b></div>`;
+    });
+
+    // คู่ตำแหน่งปกติ (คู่ทีมที่เป็นช้วนจะไม่มีรายตำแหน่งซ้ำเพราะถูกแทนที่ไปแล้วข้างบน)
+    result.pairResults.forEach(d=>{
+      const w = d.winnerId ? state.players.find(p=>p.id===d.winnerId) : null;
+      const txt = w ? `${w.name} ชนะ (+${fmtCell(1*mult).replace('+','')})` : 'เสมอ';
+      html += `<div class="settle-row" style="padding:6px 0;"><span style="font-size:12.5px;">${d.label}</span><b style="font-size:12.5px;">${txt}</b></div>`;
+    });
+
+    if(mult>1){
+      html += `<div class="settle-row" style="border-top:1px dashed var(--line); margin-top:4px; padding-top:8px;"><span style="font-size:11.5px;color:#8a8266;">ตัวคูณหลุมนี้</span><b style="font-size:11.5px;">×${mult}</b></div>`;
+    }
+    box.innerHTML = html || '<div class="empty-note">ยังไม่มีคู่แข่งขัน</div>';
+  }
+
+  function renderSummary(){
+    document.getElementById('betValDisp').textContent = state.betValue;
+    document.getElementById('teamBetValDisp').textContent = state.teamBetValue;
+    const pts = computeStandings();
+    const rows = state.players.map(p=>({p, s:pts[p.id]})).sort((a,b)=> b.s.combined - a.s.combined);
+
+    const table = document.getElementById('leadTable');
+    let html = '<tr><th>อันดับ</th><th>ผู้เล่น</th><th>หมากัด</th><th>โอลิมปิก</th><th>รวม</th><th>เงิน (บาท)</th></tr>';
+    rows.forEach((r,idx)=>{
+      const money = r.s.combined * state.betValue;
+      const badge = idx===0?'r1':idx===1?'r2':idx===2?'r3':'';
+      html += `<tr>
+        <td>${badge?`<span class="rank-badge ${badge}">${idx+1}</span>`:(idx+1)}</td>
+        <td class="name">${r.p.name}</td>
+        <td>${state.games.moogud ? r.s.moogud.toFixed(1) : '—'}</td>
+        <td>${state.games.olympic ? r.s.olympic.toFixed(1) : '—'}</td>
+        <td><b>${r.s.combined.toFixed(1)}</b></td>
+        <td class="${money>=0?'money pos':'money neg'}">${money>=0?'+':''}${money.toFixed(0)}</td>
+      </tr>`;
+    });
+    table.innerHTML = html;
+
+    // settle list: simple net vs average (informational)
+    const settleBox = document.getElementById('settleList');
+    settleBox.innerHTML = '';
+    if(rows.every(r=>r.s.combined===0)){
+      settleBox.innerHTML = '<div class="empty-note">ยังไม่มีคะแนน — กรอกสกอร์ในแต่ละหลุมก่อน</div>';
+    } else {
+      rows.forEach(r=>{
+        const money = r.s.combined*state.betValue;
+        const row = document.createElement('div');
+        row.className = 'settle-row';
+        row.innerHTML = `<span>${r.p.name}</span><b class="${money>=0?'money pos':'money neg'}">${money>=0?'ได้ ':'เสีย '}${Math.abs(money).toFixed(0)} บาท</b>`;
+        settleBox.appendChild(row);
+      });
+    }
+
+    // breakdown by game (หมากัด/โอลิมปิก only — ทีมมีการ์ดแยกของตัวเองด้านล่าง)
+    const bBox = document.getElementById('breakdownList');
+    bBox.innerHTML = '';
+    const gameLabels = {moogud:'หมากัด', olympic:'โอลิมปิก'};
+    Object.keys(gameLabels).forEach(g=>{
+      if(!state.games[g]) return;
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '10px';
+      wrap.innerHTML = `<div style="font-weight:700;font-size:13px;color:var(--fairway);margin-bottom:4px;">${gameLabels[g]}</div>`;
+      const sorted = state.players.map(p=>({p, v: pts[p.id][g]})).sort((a,b)=>b.v-a.v);
+      sorted.forEach(x=>{
+        const r = document.createElement('div');
+        r.className = 'settle-row';
+        r.style.padding = '4px 0';
+        r.innerHTML = `<span style="font-size:12.5px;">${x.p.name}</span><b style="font-size:12.5px;">${x.v.toFixed(1)}</b>`;
+        wrap.appendChild(r);
+      });
+      bBox.appendChild(wrap);
+    });
+    if(!bBox.innerHTML) bBox.innerHTML = '<div class="empty-note">ยังไม่ได้เลือกเกมพนัน</div>';
+
+    // ทีม — การ์ดแยกต่างหาก ไม่รวมกับหมากัด/โอลิมปิก
+    const teamCard = document.getElementById('teamSummaryCard');
+    if(state.games.team){
+      teamCard.style.display = 'block';
+      const tpts = computeTeamStandings();
+      const trows = state.players.map(p=>({p, v: tpts[p.id]})).sort((a,b)=>b.v-a.v);
+      const tBox = document.getElementById('teamSummaryList');
+      tBox.innerHTML = '';
+      if(trows.every(r=>r.v===0)){
+        tBox.innerHTML = '<div class="empty-note">ยังไม่มีคะแนนทีม — ตั้งทีมและกรอกสกอร์ก่อน</div>';
+      } else {
+        trows.forEach(r=>{
+          const money = r.v * state.teamBetValue;
+          const row = document.createElement('div');
+          row.className = 'settle-row';
+          row.innerHTML = `<span>${r.p.name}</span><b class="${money>=0?'money pos':'money neg'}">${r.v.toFixed(1)} พ้อย · ${money>=0?'+':''}${money.toFixed(0)} บาท</b>`;
+          tBox.appendChild(row);
+        });
+      }
+    } else {
+      teamCard.style.display = 'none';
+    }
+  }
+
+  renderPlay();
+})();
+</script>
+</body>
+</html>
