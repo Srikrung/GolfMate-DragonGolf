@@ -291,9 +291,9 @@
   .prow-head .ptotal.zero{color:#7a7259;}
   .prow-detail{padding:0 14px 12px 40px;}
   .vs-chip{
-    display:inline-flex; align-items:center; gap:5px; background:var(--sand); border-radius:8px; padding:4px 9px; margin:2px 4px 2px 0; font-size:12px;
+    display:inline-block; background:var(--sand); border-radius:8px; padding:4px 9px; margin:2px 4px 2px 0; font-size:12px; white-space:nowrap;
   }
-  .vs-chip b{font-family:'Space Mono',monospace;}
+  .vs-chip b{font-family:'Space Mono',monospace; margin-left:5px;}
   .vs-chip b.pos{color:#1B6B3A;}
   .vs-chip b.neg{color:var(--flag);}
   .vs-chip b.zero{color:#9a9179;}
@@ -1137,7 +1137,8 @@
     const origText = btn.textContent;
     btn.textContent = '⏳ กำลังสร้างรูป...';
     btn.disabled = true;
-    html2canvas(target, { backgroundColor: '#EDE7D9', scale: 2 }).then(canvas=>{
+    const ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+    ready.then(()=> html2canvas(target, { backgroundColor: '#EDE7D9', scale: 2 })).then(canvas=>{
       btn.textContent = origText;
       btn.disabled = false;
       const dataUrl = canvas.toDataURL('image/png');
