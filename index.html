@@ -373,7 +373,7 @@
       <button class="btn-secondary" id="backToPlayBtn">← กลับไปกรอกสกอร์</button>
     </section>
   </main>
-  <div class="footer-note">GolfMate • สร้างความสุขในการเดิมพัน</div>
+  <div class="footer-note">GolfMate • สร้างเพื่อทีม VIP ใช้งานบนมือถือระหว่างรอบกอล์ฟ</div>
 </div>
 
 <script>
@@ -400,14 +400,14 @@
       arr.push(existing || {id:'p'+i, name: DEFAULT_NAMES[i]});
     }
     state.players = arr;
-    // backfill strokes/olyPts/teams for any player not yet present in already-created holes
-    // (e.g. player count increased after holes were initialized)
+    // backfill strokes/olyPts for any player not yet present in already-created holes
+    // (e.g. player count increased after holes were initialized). hole.teams is intentionally
+    // left sparse — see getPlayerTeam() for how a hole's team is resolved.
     Object.keys(state.holes).forEach(n=>{
       const hole = state.holes[n];
-      state.players.forEach((p,i)=>{
+      state.players.forEach(p=>{
         if(hole.strokes[p.id] === undefined) hole.strokes[p.id] = hole.par;
         if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 0;
-        if(hole.teams[p.id] === undefined) hole.teams[p.id] = i%2===0 ? 'A' : 'B';
       });
     });
   }
@@ -415,15 +415,26 @@
 
   function ensureHole(n){
     if(!state.holes[n]){
-      const prev = state.holes[n-1]; // carry team assignment forward from the previous hole
       state.holes[n] = { par:4, turboAll:false, turboSolo:false, teamDouble:false, teamRe:false, strokes:{}, olyPts:{}, teams:{} };
-      state.players.forEach((p,i)=>{
+      state.players.forEach(p=>{
         state.holes[n].strokes[p.id] = 4;
         state.holes[n].olyPts[p.id] = 0;
-        state.holes[n].teams[p.id] = (prev && prev.teams[p.id]) ? prev.teams[p.id] : (i%2===0 ? 'A' : 'B');
+        // hole.teams[p.id] stays unset until explicitly changed on this hole — see getPlayerTeam()
       });
     }
     return state.holes[n];
+  }
+
+  // Resolves a player's team for a given hole by looking backward to the most recent hole
+  // where it was EXPLICITLY changed, so a change on any hole correctly carries forward to all
+  // later holes until the next explicit change (instead of being frozen at hole-creation time).
+  function getPlayerTeam(holeNum, pid){
+    for(let n=holeNum; n>=1; n--){
+      const h = state.holes[n];
+      if(h && h.teams[pid] !== undefined) return h.teams[pid];
+    }
+    const idx = state.players.findIndex(p=>p.id===pid);
+    return idx%2===0 ? 'A' : 'B';
   }
   for(let i=1;i<=TOTAL_HOLES;i++) ensureHole(i);
 
@@ -590,7 +601,7 @@
       const lbl = scoreLabel(strokes, hole.par);
       const div = document.createElement('div');
       div.className = 'score-card';
-      const teamKey = hole.teams[p.id] || 'A';
+      const teamKey = getPlayerTeam(state.currentHole, p.id);
       const teamBadge = state.games.team ? `<button class="team-badge ${TEAM_CLASS[teamKey]}" data-pid="${p.id}">${TEAM_LABEL[teamKey]}</button>` : '';
       const olyBlock = state.games.olympic ? `
           <div class="stepblock oly">
@@ -625,7 +636,7 @@
       const teamBadgeBtn = div.querySelector('.team-badge');
       if(teamBadgeBtn){
         teamBadgeBtn.onclick = ()=>{
-          const cur = hole.teams[p.id] || 'A';
+          const cur = getPlayerTeam(state.currentHole, p.id);
           const idx = TEAM_CYCLE.indexOf(cur);
           hole.teams[p.id] = TEAM_CYCLE[(idx+1) % TEAM_CYCLE.length];
           renderPlay();
@@ -744,20 +755,23 @@
   //   if one side won every shared position against that specific other team, it replaces that pair's
   //   summed position points with a flat ช้วน price split across the team.
   // - Solo players face every non-'none' player individually (across all teams and other solos); no ช้วน for solo.
-  // Returns { exchanges:[{winnerId,loserId,amount}], pairResults:[{label,winnerId}], chuanPairs:[{a,b,winnerTeam}] }
-  function computeTeamHole(hole){
+  // Returns { exchanges:[{winnerId,loserId,amount}], pairSummaries:[{label,netAmount,isChuan}], soloSummaries:[{name,net}] }
+  // pairSummaries/soloSummaries amounts are PRE-multiplier net totals for that specific matchup.
+  function computeTeamHole(holeNum){
+    const hole = state.holes[holeNum];
+    if(!hole) return null;
     const LETTERS = ['A','B','C','D'];
     const teams = {};
     LETTERS.forEach(L=>{
-      const members = state.players.filter(p=> hole.teams[p.id]===L);
+      const members = state.players.filter(p=> getPlayerTeam(holeNum, p.id)===L);
       if(members.length>0) teams[L] = rankByStrokes(hole, members);
     });
     const activeLetters = Object.keys(teams);
-    const solos = state.players.filter(p=> hole.teams[p.id]==='solo');
+    const solos = state.players.filter(p=> getPlayerTeam(holeNum, p.id)==='solo');
 
     const exchanges = [];
-    const pairResults = []; // for display: {label, winnerId}
-    const chuanPairs = [];  // for display: {a, b, winnerTeam}
+    const pairSummaries = []; // {label, netAmount, isChuan} — netAmount always positive, label states who's ahead
+    const soloNet = {}; // pid -> net pre-multiplier points for that solo player
 
     function exchangeBetween(p1, p2){
       const s1 = hole.strokes[p1.id], s2 = hole.strokes[p2.id];
@@ -776,44 +790,56 @@
         const posOutcomes = [];
         for(let p=0;p<maxPos;p++){
           const r = exchangeBetween(teamA[p], teamB[p]);
-          posOutcomes.push({ ...r, label:`${teamA[p].name} vs ${teamB[p].name}` });
+          posOutcomes.push(r);
         }
         const winsA = posOutcomes.filter(r=>r.winnerId && teamA.some(x=>x.id===r.winnerId)).length;
         const winsB = posOutcomes.filter(r=>r.winnerId && teamB.some(x=>x.id===r.winnerId)).length;
         const isChuan = teamA.length===teamB.length && maxPos>0 && (winsA===maxPos || winsB===maxPos);
+        if(maxPos===0) continue;
         if(isChuan){
           const winTeam = winsA===maxPos ? teamA : teamB;
           const loseTeam = winsA===maxPos ? teamB : teamA;
+          const winL = winsA===maxPos ? La : Lb, loseL = winsA===maxPos ? Lb : La;
           const share = state.chuanPoints / winTeam.length;
           winTeam.forEach((wp,idx)=> exchanges.push({winnerId:wp.id, loserId: loseTeam[idx].id, amount: share}));
-          chuanPairs.push({ a: La, b: Lb, winnerTeam: winsA===maxPos ? La : Lb });
-          // ช้วนแทนที่ผลรายตำแหน่งทั้งหมดของคู่ทีมนี้ — ไม่แสดงรายตำแหน่งซ้ำ
+          pairSummaries.push({ label:`🏆 ทีม ${winL} ช้วนทีม ${loseL}`, netAmount: state.chuanPoints, isChuan:true });
         } else {
-          posOutcomes.forEach(r=>{
-            if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
-            pairResults.push({ label:r.label, winnerId:r.winnerId });
-          });
+          posOutcomes.forEach(r=>{ if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1}); });
+          const net = winsA - winsB;
+          if(net===0){
+            pairSummaries.push({ label:`ทีม ${La} เสมอทีม ${Lb}`, netAmount:0, isChuan:false });
+          } else {
+            const winL = net>0 ? La : Lb, loseL = net>0 ? Lb : La;
+            pairSummaries.push({ label:`ทีม ${winL} ชนะทีม ${loseL}`, netAmount: Math.abs(net), isChuan:false });
+          }
         }
       }
     }
 
     // Solo vs everyone (all letter-team members + other solos), no ช้วน ever for solo matchups.
     const allNonSolo = activeLetters.flatMap(L=>teams[L]);
+    solos.forEach(s=> soloNet[s.id] = 0);
     for(let i=0;i<solos.length;i++){
       allNonSolo.forEach(opp=>{
         const r = exchangeBetween(solos[i], opp);
-        if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
-        pairResults.push({ label:`${solos[i].name} (Solo) vs ${opp.name}`, winnerId:r.winnerId });
+        if(r.winnerId){
+          exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
+          soloNet[solos[i].id] += (r.winnerId===solos[i].id ? 1 : -1);
+        }
       });
       for(let j=i+1;j<solos.length;j++){
         const r = exchangeBetween(solos[i], solos[j]);
-        if(r.winnerId) exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
-        pairResults.push({ label:`${solos[i].name} (Solo) vs ${solos[j].name} (Solo)`, winnerId:r.winnerId });
+        if(r.winnerId){
+          exchanges.push({winnerId:r.winnerId, loserId:r.loserId, amount:1});
+          soloNet[r.winnerId] += 1;
+          soloNet[r.loserId] -= 1;
+        }
       }
     }
+    const soloSummaries = solos.map(s=> ({ name:s.name, net: soloNet[s.id] }));
 
-    if(exchanges.length===0 && pairResults.length===0) return null;
-    return { exchanges, pairResults, chuanPairs };
+    if(exchanges.length===0 && pairSummaries.length===0 && soloSummaries.length===0) return null;
+    return { exchanges, pairSummaries, soloSummaries };
   }
 
   function teamMultFor(hole){
@@ -829,7 +855,7 @@
     for(let n=1;n<=TOTAL_HOLES;n++){
       const hole = state.holes[n];
       if(!hole) continue;
-      const result = computeTeamHole(hole);
+      const result = computeTeamHole(n);
       if(!result) continue;
       const mult = teamMultFor(hole);
       result.exchanges.forEach(ex=>{
@@ -926,7 +952,7 @@
   function renderTeamResult(hole){
     const teamCard = document.getElementById('teamCard');
     if(!state.games.team || state.players.length<2){ teamCard.style.display='none'; return; }
-    const result = computeTeamHole(hole);
+    const result = computeTeamHole(state.currentHole);
     teamCard.style.display = 'block';
     const box = document.getElementById('teamResultBox');
     if(!result){
@@ -936,16 +962,17 @@
     const mult = teamMultFor(hole);
     let html = '';
 
-    // ช้วนที่เกิดในหลุมนี้ (แสดงก่อน แยกจากคู่ตำแหน่งปกติ)
-    result.chuanPairs.forEach(c=>{
-      html += `<div class="settle-row"><span>🏆 ช้วน! ทีม ${c.winnerTeam} ชนะทีม ${c.a===c.winnerTeam?c.b:c.a} ทุกตำแหน่ง</span><b>${fmtCell(state.chuanPoints*mult)} พ้อย</b></div>`;
+    // สรุปสุทธิต่อคู่ทีม (ช้วนแสดงเป็นพ้อยเต็ม, ปกติแสดงส่วนต่างสุทธิ) — คูณตัวคูณหลุมนี้เสร็จแล้ว
+    result.pairSummaries.forEach(ps=>{
+      const amt = fmtCell(ps.netAmount*mult);
+      const txt = ps.netAmount===0 ? 'เสมอ' : `${amt.replace('+','')} พ้อย`;
+      html += `<div class="settle-row"><span style="font-size:${ps.isChuan?'13px':'12.5px'};">${ps.label}</span><b style="font-size:${ps.isChuan?'13px':'12.5px'};">${txt}</b></div>`;
     });
 
-    // คู่ตำแหน่งปกติ (คู่ทีมที่เป็นช้วนจะไม่มีรายตำแหน่งซ้ำเพราะถูกแทนที่ไปแล้วข้างบน)
-    result.pairResults.forEach(d=>{
-      const w = d.winnerId ? state.players.find(p=>p.id===d.winnerId) : null;
-      const txt = w ? `${w.name} ชนะ (+${fmtCell(1*mult).replace('+','')})` : 'เสมอ';
-      html += `<div class="settle-row" style="padding:6px 0;"><span style="font-size:12.5px;">${d.label}</span><b style="font-size:12.5px;">${txt}</b></div>`;
+    // Solo — สุทธิรวมทุกคู่ที่ Solo คนนั้นเจอ
+    result.soloSummaries.forEach(s=>{
+      const amt = fmtCell(s.net*mult);
+      html += `<div class="settle-row"><span style="font-size:12.5px;">${s.name} (Solo)</span><b style="font-size:12.5px;" class="${s.net>0?'money pos':s.net<0?'money neg':''}">สุทธิ ${amt}</b></div>`;
     });
 
     if(mult>1){
