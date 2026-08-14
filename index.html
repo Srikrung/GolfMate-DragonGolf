@@ -284,6 +284,7 @@
   .prow-head{display:flex; align-items:center; gap:8px; padding:12px 14px;}
   .prow-head .rank{width:18px; font-family:'Space Mono',monospace; font-size:11px; color:#9a9179; font-weight:700; flex:none;}
   .prow-head .pname{flex:1; font-weight:700; font-size:14px;}
+  .prow-head .pname.pname-toggle{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;}
   .prow-head .ptotal{font-family:'Space Mono',monospace; font-weight:700; font-size:16px;}
   .prow-head .ptotal.pos{color:#1B6B3A;}
   .prow-head .ptotal.neg{color:var(--flag);}
@@ -1000,6 +1001,15 @@
     return v>0 ? 'pos' : 'neg';
   }
 
+  const matrixMoneyMode = new Set(); // player ids currently showing money instead of points in the Matrix table
+
+  function fmtMoneyCell(v){
+    const money = v * state.betValue;
+    if(Math.abs(money) < 0.5) return '0฿';
+    const r = Math.round(money);
+    return (r>0?'+':'') + r + '฿';
+  }
+
   function renderMatrixSummary(){
     const box = document.getElementById('matrixSummaryList');
     const players = state.players;
@@ -1015,22 +1025,32 @@
     let html = '';
     order.forEach((i, rank)=>{
       const p = players[i];
+      const showMoney = matrixMoneyMode.has(p.id);
       html += `<div class="prow" data-pid="${p.id}">`;
       html += `<div class="prow-head">
           <div class="rank">${rank+1}</div>
-          <div class="pname">${p.name}</div>
-          <div class="ptotal ${cellClass(rowTotals[i])}">${fmtCell(rowTotals[i])}</div>
+          <div class="pname pname-toggle" data-pid="${p.id}">${p.name}${showMoney?' 💰':''}</div>
+          <div class="ptotal ${cellClass(rowTotals[i])}">${showMoney ? fmtMoneyCell(rowTotals[i]) : fmtCell(rowTotals[i])}</div>
         </div>`;
       html += `<div class="prow-detail">`;
       players.forEach((q,j)=>{
         if(j===i) return;
         const v = matrix[i][j];
-        html += `<span class="vs-chip">${q.name} <b class="${cellClass(v)}">${fmtCell(v)}</b></span>`;
+        html += `<span class="vs-chip">${q.name} <b class="${cellClass(v)}">${showMoney ? fmtMoneyCell(v) : fmtCell(v)}</b></span>`;
       });
       html += `</div></div>`;
     });
 
     box.innerHTML = html;
+
+    box.querySelectorAll('.pname-toggle').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const pid = el.dataset.pid;
+        if(matrixMoneyMode.has(pid)) matrixMoneyMode.delete(pid);
+        else matrixMoneyMode.add(pid);
+        renderMatrixSummary();
+      });
+    });
   }
 
   function renderTeamResult(hole){
