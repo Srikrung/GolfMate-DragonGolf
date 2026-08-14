@@ -181,7 +181,6 @@
   .colhead span{flex:1; font-size:9px; color:#9a9179; text-transform:uppercase; letter-spacing:.05em; text-align:center; font-weight:700;}
 
   .steprow{display:flex; align-items:stretch; gap:6px;}
-  .steprow .score-slider{flex:1; min-width:0;}
   .stepblock{
     flex:1; display:flex; align-items:center; justify-content:space-between; gap:6px;
     background:var(--sand); border:1px solid var(--line); border-radius:10px; padding:5px 6px;
@@ -193,28 +192,13 @@
   .stepblock.strokes button:active{background:var(--turf);}
   .stepblock.oly button{background:#E4EFE6; color:var(--fairway-light);}
   .stepblock.oly button:active{background:var(--turf);}
-  .stepblock .val{font-family:'Space Mono',monospace; font-weight:700; font-size:18px; flex:1; text-align:center;}
-  .stepblock.oly .val{color:var(--fairway-light);}
 
-  /* Slider (drag-to-set) — sits below the -/+ stepper, both control the same value */
-  .score-slider{
-    -webkit-appearance:none; appearance:none; width:100%; height:26px; background:transparent; margin-top:6px; touch-action:pan-y;
+  /* Value dropdown — sits between the -/+ buttons, tap to jump straight to a number */
+  .val-dropdown{
+    flex:1; text-align:center; text-align-last:center; font-family:'Space Mono',monospace; font-weight:700; font-size:16px;
+    border:none; background:transparent; color:var(--ink); appearance:none; -webkit-appearance:none; padding:6px 2px;
   }
-  .score-slider::-webkit-slider-runnable-track{
-    height:6px; border-radius:4px; background:var(--sand-deep);
-  }
-  .score-slider.oly::-webkit-slider-runnable-track{ background:#DCEAE0; }
-  .score-slider::-webkit-slider-thumb{
-    -webkit-appearance:none; appearance:none; width:24px; height:24px; border-radius:50%;
-    background:var(--fairway); border:3px solid var(--paper); box-shadow:0 1px 3px rgba(0,0,0,.35); margin-top:-9px;
-  }
-  .score-slider.oly::-webkit-slider-thumb{ background:var(--fairway-light); }
-  .score-slider::-moz-range-track{ height:6px; border-radius:4px; background:var(--sand-deep); }
-  .score-slider.oly::-moz-range-track{ background:#DCEAE0; }
-  .score-slider::-moz-range-thumb{
-    width:22px; height:22px; border-radius:50%; background:var(--fairway); border:3px solid var(--paper); box-shadow:0 1px 3px rgba(0,0,0,.35);
-  }
-  .score-slider.oly::-moz-range-thumb{ background:var(--fairway-light); }
+  .stepblock.oly .val-dropdown{color:var(--fairway-light);}
 
   .save-img-btn{
     width:100%; margin-top:12px; padding:12px; border-radius:10px; border:1.5px solid var(--fairway); background:#fff;
@@ -480,7 +464,7 @@
       const hole = state.holes[n];
       state.players.forEach(p=>{
         if(hole.strokes[p.id] === undefined) hole.strokes[p.id] = hole.par;
-        if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 0;
+        if(hole.olyPts[p.id] === undefined) hole.olyPts[p.id] = 1;
       });
     });
   }
@@ -491,7 +475,7 @@
       state.holes[n] = { par:4, turboAll:false, turboSolo:false, teamDouble:false, teamRe:false, strokes:{}, olyPts:{}, teams:{} };
       state.players.forEach(p=>{
         state.holes[n].strokes[p.id] = 4;
-        state.holes[n].olyPts[p.id] = 0;
+        state.holes[n].olyPts[p.id] = 1;
         // hole.teams[p.id] stays unset until explicitly changed on this hole — see getPlayerTeam()
       });
     }
@@ -670,19 +654,22 @@
     const TEAM_CLASS = { A:'a', B:'b', C:'c', D:'d', solo:'solo', none:'none' };
     state.players.forEach(p=>{
       const strokes = hole.strokes[p.id] ?? hole.par;
-      const olyVal = hole.olyPts[p.id] ?? 0;
+      const olyVal = hole.olyPts[p.id] ?? 1;
       const lbl = scoreLabel(strokes, hole.par);
       const div = document.createElement('div');
       div.className = 'score-card';
       const teamKey = getPlayerTeam(state.currentHole, p.id);
       const teamBadge = state.games.team ? `<button class="team-badge ${TEAM_CLASS[teamKey]}" data-pid="${p.id}">${TEAM_LABEL[teamKey]}</button>` : '';
+      const strokeOptions = Array.from({length:12}, (_,i)=> i+1)
+        .map(n=> `<option value="${n}" ${n===strokes?'selected':''}>${n}</option>`).join('');
+      const olyOptions = Array.from({length:10}, (_,i)=> i+1)
+        .map(n=> `<option value="${n}" ${n===olyVal?'selected':''}>${n}</option>`).join('');
       const olyBlock = state.games.olympic ? `
           <div class="stepblock oly">
             <button class="olyminus">−</button>
-            <div class="val">${olyVal}</div>
+            <select class="val-dropdown oly-dropdown">${olyOptions}</select>
             <button class="olyplus">+</button>
           </div>` : '';
-      const olySliderBlock = state.games.olympic ? `<input type="range" class="score-slider oly" min="0" max="10" step="1" value="${Math.min(10,Math.max(0,olyVal))}">` : '';
       div.innerHTML = `
         <div class="card-top">
           <div class="pname">${p.name}</div>
@@ -693,31 +680,27 @@
         <div class="steprow">
           <div class="stepblock strokes">
             <button class="minus">−</button>
-            <div class="val">${strokes}</div>
+            <select class="val-dropdown stroke-dropdown">${strokeOptions}</select>
             <button class="plus">+</button>
           </div>
           ${olyBlock}
         </div>
-        <div class="steprow">
-          <input type="range" class="score-slider strokes" min="1" max="10" step="1" value="${Math.min(10,Math.max(1,strokes))}">
-          ${olySliderBlock}
-        </div>
       `;
       div.querySelector('.minus').onclick = ()=>{ hole.strokes[p.id] = Math.max(1, strokes-1); renderPlay(); };
       div.querySelector('.plus').onclick = ()=>{ hole.strokes[p.id] = Math.min(12, strokes+1); renderPlay(); };
-      div.querySelector('.score-slider.strokes').addEventListener('input', e=>{
+      div.querySelector('.stroke-dropdown').addEventListener('change', e=>{
         hole.strokes[p.id] = parseInt(e.target.value);
         renderPlay();
       });
       const olyMinus = div.querySelector('.olyminus');
       const olyPlus = div.querySelector('.olyplus');
       if(olyMinus){
-        olyMinus.onclick = ()=>{ hole.olyPts[p.id] = olyVal - 1; renderPlay(); };
-        olyPlus.onclick = ()=>{ hole.olyPts[p.id] = olyVal + 1; renderPlay(); };
+        olyMinus.onclick = ()=>{ hole.olyPts[p.id] = Math.max(1, olyVal-1); renderPlay(); };
+        olyPlus.onclick = ()=>{ hole.olyPts[p.id] = Math.min(10, olyVal+1); renderPlay(); };
       }
-      const olySlider = div.querySelector('.score-slider.oly');
-      if(olySlider){
-        olySlider.addEventListener('input', e=>{
+      const olyDropdown = div.querySelector('.oly-dropdown');
+      if(olyDropdown){
+        olyDropdown.addEventListener('change', e=>{
           hole.olyPts[p.id] = parseInt(e.target.value);
           renderPlay();
         });
